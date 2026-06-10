@@ -11,10 +11,22 @@ dependencies, no assets — pure HTML5 canvas, vanilla JavaScript, and WebAudio.
 
 ## Play
 
-Open `index.html` in any modern browser. That's it.
+**Live:** <https://robrichardsdpt.github.io/aethermoor-play/> — works on
+desktop and phones (virtual joystick + touch controls appear automatically).
 
-(Or serve it, if you prefer: `python3 -m http.server 8000` then visit
-<http://localhost:8000>.)
+Locally: open `index.html` in any modern browser. That's it.
+(Or serve it: `python3 -m http.server 8000` → <http://localhost:8000>.)
+
+## Repos & deployment
+
+- **Source of truth (private):** `robrichardsdpt/aethermoor`
+- **Deploy mirror (public):** `robrichardsdpt/aethermoor-play`, served by
+  GitHub Pages from `main`. (Pages can't serve private repos on the free
+  plan; a deployed static site's files are publicly fetchable regardless,
+  so the mirror exposes nothing that deployment itself doesn't.)
+
+Ship changes with `npm run deploy` — it pushes `main` to both remotes;
+Pages redeploys automatically in about a minute.
 
 ## Controls
 
