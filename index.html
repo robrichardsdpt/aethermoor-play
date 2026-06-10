@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0a0c14">
+<title>AETHERMOOR — The Shattered Light</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<canvas id="game"></canvas>
+<div id="vignette"></div>
+
+<!-- Battle (the Umbra) -->
+<canvas id="battle-canvas" class="hidden"></canvas>
+<div id="battle-ui" class="hidden">
+  <div id="b-foe" class="b-side">
+    <div id="b-foe-name" class="b-name"></div>
+    <div class="b-bar foe"><div id="b-foe-fill"></div></div>
+    <div id="b-foe-sub" class="b-sub"></div>
+  </div>
+  <div id="b-hero" class="b-side">
+    <div id="b-hero-name" class="b-name"></div>
+    <div class="b-bar hero"><div id="b-hero-fill"></div></div>
+    <div id="b-hero-sub" class="b-sub"></div>
+  </div>
+  <div id="b-log"></div>
+  <div id="b-actions"></div>
+</div>
+<div id="skill-choice" class="overlay hidden">
+  <div id="skill-choice-inner">
+    <div class="panel-title">THE DARK YIELDS — CHOOSE WHAT IT TEACHES YOU</div>
+    <div id="skill-cards"></div>
+  </div>
+</div>
+
+<!-- HUD -->
+<div id="hud" class="hidden">
+  <div id="hud-left">
+    <div id="loc">—</div>
+    <div id="timeofday">—</div>
+    <div id="hero-line">—</div>
+    <div id="hp-bar"><div id="hp-fill"></div></div>
+  </div>
+  <div id="hud-right">
+    <div id="shards">✦ 0 / 7 Shards</div>
+    <div id="frags">❖ 0 Fragments</div>
+  </div>
+  <div id="compass" class="hidden">
+    <span id="compass-arrow">➤</span>
+    <span id="compass-label"></span>
+  </div>
+  <div id="stamina"><div id="stamina-fill"></div></div>
+</div>
+
+<canvas id="minimap" class="hidden" width="176" height="176"></canvas>
+
+<!-- Touch controls (shown only on touch devices) -->
+<div id="joy-zone"></div>
+<div id="joy-base" class="hidden"><div id="joy-knob"></div></div>
+<button id="btn-interact">✦</button>
+<div id="touch-menu">
+  <button id="btn-map">M</button>
+  <button id="btn-journal">J</button>
+  <button id="btn-sound">♪</button>
+</div>
+
+<div id="banner" class="hidden">
+  <div id="banner-title"></div>
+  <div id="banner-sub"></div>
+</div>
+
+<div id="prompt" class="hidden"></div>
+
+<!-- Lore modal -->
+<div id="lore-modal" class="overlay hidden">
+  <div class="panel">
+    <div id="lore-title" class="panel-title"></div>
+    <div id="lore-text" class="panel-body"></div>
+    <div class="panel-foot">[E] or [Esc] — close</div>
+  </div>
+</div>
+
+<!-- Journal -->
+<div id="journal" class="overlay hidden">
+  <div class="panel wide">
+    <div class="panel-title">Wayfarer's Journal</div>
+    <div id="journal-body" class="panel-body"></div>
+    <div class="panel-foot">[J] or [Esc] — close &nbsp;·&nbsp; click a fragment to read it</div>
+  </div>
+</div>
+
+<!-- Map -->
+<div id="map-overlay" class="overlay hidden">
+  <canvas id="map-canvas"></canvas>
+  <div id="map-hint">[M] or [Esc] — close &nbsp;·&nbsp; scroll to zoom &nbsp;·&nbsp; click an awakened ◆ Waystone to travel there</div>
+</div>
+
+<!-- Help -->
+<div id="help" class="overlay hidden">
+  <div class="panel">
+    <div class="panel-title">Controls</div>
+    <div class="panel-body">
+      <table class="keys">
+        <tr><td>WASD / Arrows</td><td>move</td></tr>
+        <tr><td>Shift</td><td>sprint (uses stamina)</td></tr>
+        <tr><td>E</td><td>examine / attune / challenge</td></tr>
+        <tr><td>1 – 9</td><td>battle: use an Art / flee / pick a card</td></tr>
+        <tr><td>M</td><td>map of the known world</td></tr>
+        <tr><td>J</td><td>journal</td></tr>
+        <tr><td>P</td><td>sound on / off</td></tr>
+        <tr><td>H</td><td>this help</td></tr>
+      </table>
+    </div>
+    <div class="panel-foot">[H] or [Esc] — close</div>
+  </div>
+</div>
+
+<!-- Title screen -->
+<div id="title-screen">
+  <div id="title-inner">
+    <div class="title-rune">✦</div>
+    <h1>AETHERMOOR</h1>
+    <h2>The Shattered Light</h2>
+    <p id="title-lore">
+      Before the first dawn there was only the First Light, held aloft in the Lumen Spire
+      by the Architects of old. When the Spire was broken in the Sundering, the Light burst
+      into seven shards and the world tore itself into endless wandering lands.
+      The Architects are dust. Their monoliths still whisper.<br><br>
+      You are the last Wayfarer of the Last Hearth. Walk the broken world.
+      Find the seven Shards. Relight the dark.<br><br>
+      But the dark has teeth: the Unlit roam the far lands, and a Guardian
+      coils around every Shard. Defeat them in the Umbra, and each victory
+      will teach you its Arts — until the Wayfarer is something far greater.
+    </p>
+    <p id="title-start" class="pulse">— press Enter to begin —</p>
+    <p id="title-meta"></p>
+  </div>
+</div>
+
+<!-- Win screen -->
+<div id="win-screen" class="overlay hidden">
+  <div id="win-inner">
+    <div class="title-rune">✦</div>
+    <h1>THE LIGHT RESTORED</h1>
+    <p id="win-text"></p>
+    <p class="pulse">— press Enter to keep wandering —</p>
+  </div>
+</div>
+
+<script src="src/rng.js"></script>
+<script src="src/noise.js"></script>
+<script src="src/lore.js"></script>
+<script src="src/skills.js"></script>
+<script src="src/world.js"></script>
+<script src="src/audio.js"></script>
+<script src="src/player.js"></script>
+<script src="src/battle3d.js"></script>
+<script src="src/battle.js"></script>
+<script src="src/ui.js"></script>
+<script src="src/touch.js"></script>
+<script src="src/main.js"></script>
+</body>
+</html>

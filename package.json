@@ -1,0 +1,13 @@
+{
+  "name": "aethermoor",
+  "version": "1.0.0",
+  "description": "AETHERMOOR — The Shattered Light: an infinite procedural world-exploration game in vanilla JS. The game itself has zero dependencies; puppeteer-core only drives the headless smoke test.",
+  "license": "MIT",
+  "scripts": {
+    "test": "node test/smoke.js",
+    "start": "python3 -m http.server 8000"
+  },
+  "devDependencies": {
+    "puppeteer-core": "^25.1.0"
+  }
+}
