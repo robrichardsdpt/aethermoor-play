@@ -129,6 +129,29 @@ class AudioEngine {
     src.start(t);
   }
 
+  sparkle() {
+    [1046, 1318, 1568, 2093].forEach((f, i) => this._note(f, i * 0.05, 0.5, 0.06));
+  }
+
+  meteor() {
+    if (!this.ctx) return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(2600, t);
+    osc.frequency.exponentialRampToValueAtTime(120, t + 1.3);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.001, t);
+    g.gain.exponentialRampToValueAtTime(0.07, t + 0.4);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 1.4);
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass'; lp.frequency.value = 1800;
+    osc.connect(lp); lp.connect(g); g.connect(this.master);
+    osc.start(t); osc.stop(t + 1.5);
+    setTimeout(() => this.hit(true), 1300);
+  }
+
   thunder() {
     if (!this.ctx) return;
     const ctx = this.ctx;

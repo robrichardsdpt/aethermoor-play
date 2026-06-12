@@ -62,6 +62,7 @@ class Player {
     const walk = this.walkAt(this.x / TILE, this.y / TILE) || 0.5;
     const sprintMult = hasBoon('storm') ? 2.25 : 1.65;     // Stormstep
     let speed = this.baseSpeed * walk * (this.sprinting ? sprintMult : 1);
+    if (hasRelic('wind-band')) speed *= 1.12;              // the Restless Wind
     const swimming = this.inWater();
     if (swimming && this.stamina <= 0.02 && !hasBoon('tide')) speed *= 0.6;
     if (hasBoon('dusk') && typeof daylight === 'function' && daylight() < 0.4) {
@@ -81,7 +82,9 @@ class Player {
     if (drain > 0 && this.moving) {
       this.stamina = Math.max(0, this.stamina - drain * dt);
     } else {
-      this.stamina = Math.min(1, this.stamina + (hasBoon('ember') ? 0.34 : 0.16) * dt);
+      let regen = hasBoon('ember') ? 0.34 : 0.16;
+      if (hasRelic('ember-core')) regen *= 1.35;           // the Emberheart Coal
+      this.stamina = Math.min(1, this.stamina + regen * dt);
     }
 
     // boon trails, drawn by the overworld renderer

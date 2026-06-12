@@ -20,6 +20,8 @@ const game = {
   fireflies: [],
   shades: [],                   // the Unlit, roaming the overworld
   rifts: [],                    // night tears into the Umbra
+  wisps: [],                    // darting lights worth chasing
+  floats: [],                   // little floating reward texts
   orun: null,                   // the tall stranger, when he deigns to appear
   iceTrail: [],                 // Frostpath footprints
   sparks: [],                   // Stormstep lightning
@@ -35,6 +37,7 @@ function defaultHero() {
     skills: new Map([['strike', 1]]),
     battlesWon: 0, shield: 0, dodge: 0,
     riftlight: 0, blind: 0, burnT: 0,
+    relics: new Set(),
   };
 }
 
@@ -74,7 +77,42 @@ function newState() {
     restored: false,
     orunMet: 0,                // how many times the stranger has spoken
     orunGifted: false,
+    opened: new Set(),         // cache ids already looted
+    tallies: { caches: 0, wisps: 0, elites: 0, stars: 0 },
   };
+}
+
+/** Floating overworld reward text. */
+function addFloat(str, col) {
+  game.floats.push({ x: game.player.x, y: game.player.y - 18, str, col: col || '#e8c66a', t: 0 });
+}
+
+/** Earn light (XP) outside of battle — exploring is worth something now. */
+function grantLight(n, quiet) {
+  const h = game.hero;
+  n = Math.round(n * (hasRelic('gold-sliver') ? 1.15 : 1));
+  h.xp += n;
+  if (!quiet) addFloat('+' + n + ' light');
+  let leveled = false;
+  while (h.xp >= xpNeed(h.level)) {
+    h.xp -= xpNeed(h.level);
+    h.level++;
+    h.maxHp += 14;
+    h.atk += 2.4;
+    h.hp = h.maxHp;
+    leveled = true;
+  }
+  if (leveled) {
+    game.audio.attune();
+    UI.banner('LEVEL ' + h.level, 'The road hardens you. Mended in full.', 3600);
+    const t = tierOf(h.level);
+    if (TIERS[t].minLevel === h.level) {
+      setTimeout(() => {
+        game.audio.fanfare();
+        UI.banner('✦ EVOLUTION — ' + TIERS[t].name.toUpperCase() + ' ✦', TIERS[t].line, 6000);
+      }, 3800);
+    }
+  }
 }
 
 function init() {
@@ -114,9 +152,10 @@ function saveGame() {
       hero: {
         level: h.level, xp: h.xp, maxHp: h.maxHp, hp: Math.ceil(h.hp),
         atk: h.atk, skills: [...h.skills], battlesWon: h.battlesWon,
-        riftlight: h.riftlight,
+        riftlight: h.riftlight, relics: [...h.relics],
       },
       orunMet: s.orunMet, orunGifted: s.orunGifted,
+      opened: [...s.opened], tallies: s.tallies,
     }));
   } catch (e) { /* storage full or blocked — the journey continues unsaved */ }
 }
@@ -139,6 +178,8 @@ function loadGame(seed) {
   s.restored = !!data.restored;
   s.orunMet = data.orunMet || 0;
   s.orunGifted = !!data.orunGifted;
+  s.opened = new Set(data.opened || []);
+  s.tallies = data.tallies || { caches: 0, wisps: 0, elites: 0, stars: 0 };
   if (data.hero) {
     const h = game.hero;
     h.level = data.hero.level; h.xp = data.hero.xp;
@@ -147,6 +188,7 @@ function loadGame(seed) {
     h.skills = new Map(data.hero.skills);
     h.battlesWon = data.hero.battlesWon || 0;
     h.riftlight = data.hero.riftlight || 0;
+    h.relics = new Set(data.hero.relics || []);
   }
   // regenerate POIs for explored chunks so map markers resolve
   for (const key of s.explored) {
@@ -262,6 +304,7 @@ function interact() {
     });
     return;
   }
+  if (nearStarSite(2.4)) { salvageStar(); return; }
   const poi = game.nearbyPoi;
   if (!poi) return;
   const s = game.state;
@@ -285,7 +328,50 @@ function interact() {
       UI.banner(poi.name.toUpperCase(), LORE.WAYSTONE_LINE +
         (first ? ' A faint pull settles into your bones: the Resonance.' : ''), 5200);
     } else {
-      UI.banner(poi.name.toUpperCase(), LORE.WAYSTONE_AGAIN, 2400);
+      // the stones gossip about places you haven't found
+      let best = null, bestD = 170;
+      for (const p of game.world.poisNear(game.player.tileX, game.player.tileY, 5)) {
+        if (s.discovered.has(p.id) || p.type === 'sanctum') continue;
+        const d = Math.hypot(p.x - game.player.tileX, p.y - game.player.tileY);
+        if (d < bestD && d > 8) { best = p; bestD = d; }
+      }
+      if (best) {
+        game.rumor = { x: best.x, y: best.y, expires: game.time + 90 };
+        UI.banner(poi.name.toUpperCase(),
+          'The stones gossip: something undiscovered waits to the ' +
+          compassWord(best.x - game.player.tileX, best.y - game.player.tileY) +
+          ', ' + (bestD | 0) + ' strides out.', 5200);
+        game.audio.attune();
+      } else {
+        UI.banner(poi.name.toUpperCase(), LORE.WAYSTONE_AGAIN, 2400);
+      }
+    }
+
+  } else if (poi.type === 'cache') {
+    if (!s.opened.has(poi.id)) {
+      s.opened.add(poi.id);
+      s.tallies.caches++;
+      game.audio.discovery();
+      const pool = unownedRelics();
+      const roll = Math.random();
+      if (pool.length && roll < 0.45) {
+        grantRelic(pool[(Math.random() * pool.length) | 0]);
+      } else if (roll < 0.8) {
+        const dist = Math.hypot(poi.x - game.world.spawn.x, poi.y - game.world.spawn.y);
+        grantLight(22 + Math.min(40, dist / 18));
+        UI.banner('THE CACHE OPENS', 'Packed light, still bright after an age. The Architects sealed things well.', 4200);
+      } else {
+        const h = game.hero;
+        if (Math.random() < 0.5) {
+          h.atk = Math.round(h.atk * 1.03 * 10) / 10;
+          UI.banner('THE CACHE OPENS', 'A vial of something dense. Might +3%, forever.', 4200);
+        } else {
+          h.maxHp = Math.round(h.maxHp * 1.04);
+          h.hp = Math.min(h.maxHp, h.hp + 20);
+          UI.banner('THE CACHE OPENS', 'Mountain-bone dust. Greatest vitality +4%, forever.', 4200);
+        }
+      }
+      saveGame();
     }
 
   } else if (poi.type === 'sanctum') {
@@ -341,11 +427,17 @@ function updateShades(dt) {
     const r = (Math.max(canvas.width, canvas.height) / 2 + 80) / TILE;
     const tx = p.tileX + Math.cos(a) * r, ty = p.tileY + Math.sin(a) * r;
     if (game.world.walkFactor(tx, ty) > 0.4) {
+      const lvl = menaceAt(tx, ty);
+      const elite = lvl >= 3 && Math.random() < 0.14;
       game.shades.push({
         x: (tx + 0.5) * TILE, y: (ty + 0.5) * TILE,
-        level: menaceAt(tx, ty), wob: Math.random() * 7,
+        level: lvl + (elite ? 2 : 0), elite,
+        wob: Math.random() * 7,
         wanderA: Math.random() * Math.PI * 2,
       });
+      if (elite) {
+        UI.banner('SOMETHING LARGE IS HUNTING', 'An elite of the Unlit has your scent. It carries something that glints.', 4200);
+      }
     }
   }
 
@@ -356,9 +448,12 @@ function updateShades(dt) {
     if (dist > 75) { game.shades.splice(i, 1); continue; }
 
     let vx, vy;
-    if (dist < 17 && !hasBoon('dusk')) {   // it has your scent (unless cloaked)
-      vx = (dx / (dist * TILE)) * 2.5 * TILE;
-      vy = (dy / (dist * TILE)) * 2.5 * TILE;
+    let scent = sh.elite ? 22 : 17;
+    if (hasRelic('dark-charm')) scent /= 2;          // the Hushed Bell
+    const speed = sh.elite ? 3.1 : 2.5;
+    if (dist < scent && !hasBoon('dusk')) {          // it has your scent
+      vx = (dx / (dist * TILE)) * speed * TILE;
+      vy = (dy / (dist * TILE)) * speed * TILE;
     } else {                               // it drifts, hungry
       sh.wanderA += (Math.random() - 0.5) * dt * 2;
       vx = Math.cos(sh.wanderA) * 1.1 * TILE;
@@ -368,7 +463,7 @@ function updateShades(dt) {
     if (game.world.walkFactor(nx / TILE, ny / TILE) > 0.3) { sh.x = nx; sh.y = ny; }
 
     if (dist < 1.15 && game.battleGrace <= 0) {
-      Battle.start({ level: sh.level, shade: sh });
+      Battle.start({ level: sh.level, shade: sh, elite: sh.elite });
       return;
     }
   }
@@ -398,22 +493,46 @@ function drawSparks(camX, camY) {
   ctx.restore();
 }
 
+function drawFloats(camX, camY) {
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.font = '600 15px Cinzel, serif';
+  for (const fl of game.floats) {
+    const a = Math.max(0, 1 - fl.t / 1.6);
+    ctx.fillStyle = fl.col;
+    ctx.globalAlpha = a;
+    ctx.shadowColor = '#000';
+    ctx.shadowBlur = 4;
+    ctx.fillText(fl.str,
+      fl.x - camX + canvas.width / 2,
+      fl.y - camY + canvas.height / 2 - fl.t * 26);
+  }
+  ctx.restore();
+}
+
 function drawShades(camX, camY, t) {
   for (const sh of game.shades) {
     const sx = sh.x - camX + canvas.width / 2;
     const sy = sh.y - camY + canvas.height / 2;
     if (sx < -40 || sy < -40 || sx > canvas.width + 40 || sy > canvas.height + 40) continue;
     const wob = Math.sin(t * 3 + sh.wob) * 1.5;
-    const g = ctx.createRadialGradient(sx, sy, 1, sx, sy, 13 + wob);
-    g.addColorStop(0, 'rgba(28,16,44,0.95)');
+    const R = sh.elite ? 20 : 13;
+    const g = ctx.createRadialGradient(sx, sy, 1, sx, sy, R + wob);
+    g.addColorStop(0, sh.elite ? 'rgba(40,14,52,0.97)' : 'rgba(28,16,44,0.95)');
     g.addColorStop(0.7, 'rgba(20,10,36,0.7)');
     g.addColorStop(1, 'rgba(20,10,36,0)');
     ctx.fillStyle = g;
-    ctx.fillRect(sx - 16, sy - 16, 32, 32);
-    const eye = sh.level >= 8 ? '#ff5a5a' : sh.level >= 4 ? '#c46bd6' : '#7a6bd6';
+    ctx.fillRect(sx - R - 4, sy - R - 4, (R + 4) * 2, (R + 4) * 2);
+    const eye = sh.elite ? '#ff4040' : sh.level >= 8 ? '#ff5a5a' : sh.level >= 4 ? '#c46bd6' : '#7a6bd6';
     ctx.fillStyle = eye;
-    ctx.fillRect(sx - 4, sy - 3 + wob * 0.4, 2.5, 2.5);
-    ctx.fillRect(sx + 1.5, sy - 3 + wob * 0.4, 2.5, 2.5);
+    const es = sh.elite ? 3.4 : 2.5;
+    ctx.fillRect(sx - 5, sy - 3 + wob * 0.4, es, es);
+    ctx.fillRect(sx + 2, sy - 3 + wob * 0.4, es, es);
+    if (sh.elite) {
+      // it carries something that glints
+      ctx.fillStyle = 'rgba(255,215,130,' + (0.6 + Math.sin(t * 5) * 0.35).toFixed(2) + ')';
+      ctx.beginPath(); ctx.arc(sx + 8, sy - 12 + wob, 2, 0, 7); ctx.fill();
+    }
   }
 }
 
@@ -439,6 +558,9 @@ function checkDiscoveries() {
       s.discoveredNames.push(poi.name);
       game.audio.discovery();
       UI.banner('DISCOVERED', poi.name, 3000);
+      // exploring pays: light scaled by how far you've dared to walk
+      const far = Math.hypot(poi.x - game.world.spawn.x, poi.y - game.world.spawn.y);
+      grantLight(Math.round(6 + Math.min(36, far / 22)));
     }
   }
 }
@@ -455,12 +577,14 @@ function updateNearbyPoi() {
   if (UI.anyOpen()) { UI.prompt(null); return; }
   if (orunAtHearth()) { UI.prompt('E — be kind'); return; }
   if (nearestRift(2.4)) { UI.prompt('⚔ E — step into the rift'); return; }
+  if (nearStarSite(2.4)) { UI.prompt('✶ E — salvage the fallen star'); return; }
   if (!best) { UI.prompt(null); return; }
   const s = game.state;
   let text = null;
   if (best.type === 'monolith') text = 'E — read the Monolith';
   else if (best.type === 'ruin') text = 'E — search the ruins';
-  else if (best.type === 'waystone') text = s.activated.has(best.id) ? 'E — touch the Waystone' : 'E — attune to the Waystone';
+  else if (best.type === 'cache') text = s.opened.has(best.id) ? null : '✶ E — open the Architect’s cache';
+  else if (best.type === 'waystone') text = s.activated.has(best.id) ? 'E — ask the Waystone for rumors' : 'E — attune to the Waystone';
   else if (best.type === 'sanctum' && !s.shards.has(best.shard.key)) text = '⚔ E — challenge the Guardian of the ' + best.shard.name;
   UI.prompt(text);
 }
@@ -667,6 +791,203 @@ function drawRifts(camX, camY, t) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Light wisps: catch them if you can                                  */
+/* ------------------------------------------------------------------ */
+
+function updateWisps(dt) {
+  const p = game.player;
+  if (game.wisps.length < 2 && Math.random() < 0.045 * dt * 60) {
+    const a = Math.random() * Math.PI * 2;
+    const r = (Math.max(canvas.width, canvas.height) / 2 + 60) / TILE;
+    const tx = p.tileX + Math.cos(a) * r, ty = p.tileY + Math.sin(a) * r;
+    if (game.world.walkFactor(tx, ty) > 0.4) {
+      game.wisps.push({
+        x: (tx + 0.5) * TILE, y: (ty + 0.5) * TILE,
+        age: 0, ph: Math.random() * 7, wanderA: Math.random() * Math.PI * 2,
+      });
+    }
+  }
+  for (let i = game.wisps.length - 1; i >= 0; i--) {
+    const w = game.wisps[i];
+    w.age += dt;
+    const dx = p.x - w.x, dy = p.y - w.y;
+    const dist = Math.hypot(dx, dy) / TILE;
+    if (w.age > 22 || dist > 75) { game.wisps.splice(i, 1); continue; }
+
+    let vx, vy;
+    if (hasRelic('wisp-call') && dist < 14) {        // it comes to the whistle
+      vx = (dx / (dist * TILE)) * 2.6 * TILE;
+      vy = (dy / (dist * TILE)) * 2.6 * TILE;
+    } else if (dist < 11) {                          // it flees — sprint!
+      vx = -(dx / (dist * TILE)) * 5.4 * TILE;
+      vy = -(dy / (dist * TILE)) * 5.4 * TILE;
+    } else {
+      w.wanderA += (Math.random() - 0.5) * dt * 3;
+      vx = Math.cos(w.wanderA) * 1.6 * TILE;
+      vy = Math.sin(w.wanderA) * 1.6 * TILE;
+    }
+    const nx = w.x + vx * dt, ny = w.y + vy * dt;
+    if (game.world.walkFactor(nx / TILE, ny / TILE) > 0.3) { w.x = nx; w.y = ny; }
+    else { w.wanderA += Math.PI / 2; }
+
+    if (dist < 1.15) {                               // caught!
+      game.wisps.splice(i, 1);
+      game.state.tallies.wisps++;
+      game.player.stamina = 1;
+      grantLight(12 + menaceAt(p.tileX, p.tileY) * 2);
+      addFloat('the wisp sighs into you', '#bfeaff');
+      game.audio.sparkle();
+    }
+  }
+}
+
+function drawWisps(camX, camY, t) {
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (const w of game.wisps) {
+    const sx = w.x - camX + canvas.width / 2;
+    const sy = w.y - camY + canvas.height / 2 + Math.sin(t * 4 + w.ph) * 3;
+    if (sx < -30 || sy < -30 || sx > canvas.width + 30 || sy > canvas.height + 30) continue;
+    const fade = Math.min(1, w.age * 2, (22 - w.age) / 2);
+    const g = ctx.createRadialGradient(sx, sy, 1, sx, sy, 14);
+    g.addColorStop(0, 'rgba(200,240,255,' + (0.8 * fade).toFixed(2) + ')');
+    g.addColorStop(1, 'rgba(160,220,255,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(sx - 14, sy - 14, 28, 28);
+    ctx.fillStyle = 'rgba(240,252,255,' + fade.toFixed(2) + ')';
+    ctx.beginPath(); ctx.arc(sx, sy, 2.6 + Math.sin(t * 6 + w.ph) * 0.8, 0, 7); ctx.fill();
+  }
+  ctx.restore();
+}
+
+/* ------------------------------------------------------------------ */
+/* Falling stars: pieces of the old sky, briefly up for grabs          */
+/* ------------------------------------------------------------------ */
+
+const STARS = { next: 80, site: null, streak: null };
+
+function updateStars(dt) {
+  if (STARS.streak) {
+    STARS.streak.t += dt;
+    if (STARS.streak.t > 1.3) {
+      const s = STARS.streak;
+      STARS.streak = null;
+      STARS.site = { x: s.x, y: s.y, expires: game.time + 160 };
+      const dir = compassWord(s.x - game.player.tileX, s.y - game.player.tileY);
+      UI.banner('A STAR FALLS', 'Something struck the earth to the ' + dir + '. The dark will come to feed on it. Be faster.', 5200);
+    }
+    return;
+  }
+  if (STARS.site) {
+    if (game.time > STARS.site.expires) {
+      STARS.site = null;
+      STARS.next = game.time + 110 + Math.random() * 130;
+      UI.banner('THE STARLIGHT FADES', 'Whatever fell has gone out, or been eaten.', 3400);
+    }
+    return;
+  }
+  if (game.time > STARS.next && game.mode === 'playing' && !UI.anyOpen()) {
+    for (let tries = 0; tries < 8; tries++) {
+      const a = Math.random() * Math.PI * 2;
+      const r = 30 + Math.random() * 22;
+      const tx = Math.round(game.player.tileX + Math.cos(a) * r);
+      const ty = Math.round(game.player.tileY + Math.sin(a) * r);
+      if (game.world.walkFactor(tx, ty) > 0.4) {
+        STARS.streak = { t: 0, x: tx, y: ty };
+        game.audio.meteor();
+        break;
+      }
+    }
+    if (!STARS.streak) STARS.next = game.time + 30;
+  }
+}
+
+function compassWord(dx, dy) {
+  const dirs = ['east', 'south-east', 'south', 'south-west', 'west', 'north-west', 'north', 'north-east'];
+  const a = Math.atan2(dy, dx);
+  return dirs[((Math.round(a / (Math.PI / 4)) % 8) + 8) % 8];
+}
+
+function drawStarStreak() {
+  if (!STARS.streak) return;
+  const k = Math.min(1, STARS.streak.t / 1.3);
+  const x0 = canvas.width * 0.85, y0 = -30;
+  const x1 = canvas.width * 0.25, y1 = canvas.height * 0.42;
+  const hx = x0 + (x1 - x0) * k, hy = y0 + (y1 - y0) * k;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const tail = ctx.createLinearGradient(hx - (x1 - x0) * 0.18, hy - (y1 - y0) * 0.18, hx, hy);
+  tail.addColorStop(0, 'rgba(255,240,200,0)');
+  tail.addColorStop(1, 'rgba(255,240,200,0.9)');
+  ctx.strokeStyle = tail;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(hx - (x1 - x0) * 0.18, hy - (y1 - y0) * 0.18);
+  ctx.lineTo(hx, hy);
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(255,250,230,1)';
+  ctx.shadowColor = '#ffd27a'; ctx.shadowBlur = 18;
+  ctx.beginPath(); ctx.arc(hx, hy, 4, 0, 7); ctx.fill();
+  ctx.restore();
+}
+
+function drawStarSite(camX, camY, t) {
+  const s = STARS.site;
+  if (!s) return;
+  const sx = (s.x + 0.5) * TILE - camX + canvas.width / 2;
+  const sy = (s.y + 0.5) * TILE - camY + canvas.height / 2;
+  if (sx < -90 || sy < -90 || sx > canvas.width + 90 || sy > canvas.height + 90) return;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const pulse = 0.6 + Math.sin(t * 3) * 0.25;
+  const g = ctx.createRadialGradient(sx, sy, 2, sx, sy, 42);
+  g.addColorStop(0, 'rgba(255,235,170,' + (0.55 * pulse).toFixed(2) + ')');
+  g.addColorStop(1, 'rgba(255,210,120,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(sx - 42, sy - 42, 84, 84);
+  for (let i = 0; i < 4; i++) {            // rising sparks
+    const ph = (t * 0.7 + i * 0.25) % 1;
+    ctx.fillStyle = 'rgba(255,240,190,' + (0.8 * (1 - ph)).toFixed(2) + ')';
+    ctx.fillRect(sx + Math.sin(i * 2.4 + t) * 10, sy - ph * 30, 2, 2);
+  }
+  ctx.restore();
+  ctx.fillStyle = '#ffd27a';
+  ctx.beginPath(); ctx.arc(sx, sy, 5, 0, 7); ctx.fill();
+  ctx.fillStyle = '#7a5a20';
+  ctx.beginPath(); ctx.arc(sx, sy, 2.2, 0, 7); ctx.fill();
+}
+
+function nearStarSite(maxDist) {
+  const s = STARS.site;
+  if (!s) return null;
+  return Math.hypot(s.x + 0.5 - game.player.x / TILE, s.y + 0.5 - game.player.y / TILE) < maxDist ? s : null;
+}
+
+function salvageStar() {
+  const s = STARS.site;
+  STARS.site = null;
+  STARS.next = game.time + 110 + Math.random() * 130;
+  game.state.tallies.stars++;
+  grantLight(40 + menaceAt(s.x, s.y) * 4);
+  game.audio.discovery();
+  const pool = unownedRelics();
+  if (pool.length && Math.random() < 0.5) {
+    grantRelic(pool[(Math.random() * pool.length) | 0]);
+  } else {
+    UI.banner('STARLIGHT SALVAGED', 'You cup what is left of a very old sky. It hums approval.', 4200);
+  }
+  if (Math.random() < 0.7) {               // the dark was coming to feed
+    const n = 1 + (Math.random() < 0.35 ? 1 : 0);
+    setTimeout(() => {
+      if (game.mode !== 'playing') return;
+      UI.banner('THE DARK COMES TO FEED', 'It wanted the starlight. You are holding the starlight.', 3600);
+      Battle.start({ level: menaceAt(s.x, s.y) + 1, count: n, elite: Math.random() < 0.3 });
+    }, 1800);
+  }
+  saveGame();
+}
+
+/* ------------------------------------------------------------------ */
 /* Orun-of-the-Steady-Hands                                            */
 /* ------------------------------------------------------------------ */
 
@@ -822,6 +1143,29 @@ function drawPOI(poi, sx, sy, t) {
     ctx.fillRect(sx + 5, sy - 8, 5, 10);
     ctx.fillStyle = '#4a4840';
     ctx.fillRect(sx - 3, sy - 2, 7, 4);
+  } else if (poi.type === 'cache') {
+    const opened = s.opened.has(poi.id);
+    // a sealed pod of the Architects
+    ctx.fillStyle = opened ? '#3a3630' : '#4a4438';
+    ctx.beginPath();
+    ctx.ellipse(sx, sy - 4, 9, 7, 0, Math.PI, 0);
+    ctx.fill();
+    ctx.fillRect(sx - 9, sy - 4, 18, 6);
+    ctx.fillStyle = opened ? '#2a2722' : '#5c5546';
+    ctx.fillRect(sx - 9, sy - 5, 18, 2);
+    if (!opened) {
+      const pulse = 0.55 + Math.sin(t * 2.6) * 0.35;
+      ctx.fillStyle = 'rgba(255,215,130,' + pulse.toFixed(2) + ')';
+      ctx.fillRect(sx - 7, sy - 4.5, 14, 1.5);          // glowing seam
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < 3; i++) {                      // rising sparkles
+        const ph = (t * 0.6 + i * 0.33) % 1;
+        ctx.fillStyle = 'rgba(255,230,160,' + (0.9 * (1 - ph)).toFixed(2) + ')';
+        ctx.fillRect(sx - 6 + i * 6, sy - 8 - ph * 22, 1.6, 1.6);
+      }
+      ctx.restore();
+    }
   } else if (poi.type === 'waystone') {
     const active = s.activated.has(poi.id);
     if (active) {
@@ -891,11 +1235,20 @@ function drawNight(camX, camY) {
     lightCtx.fillStyle = g;
     lightCtx.fillRect(sx - r, sy - r, r * 2, r * 2);
   };
-  // the Wayfarer's lantern (Dawnlight boon: it burns far wider)
-  punch(w / 2, h / 2, hasBoon('dawn') ? 260 : 150, hasBoon('dawn') ? 0.95 : 0.85);
+  // the Wayfarer's lantern (Dawnlight boon and Lantern Heart widen it)
+  let lr = hasBoon('dawn') ? 260 : 150;
+  if (hasRelic('lantern-heart')) lr *= 1.6;
+  punch(w / 2, h / 2, lr, hasBoon('dawn') ? 0.95 : 0.85);
   for (const rf of game.rifts) {
     punch((rf.x + 0.5) * TILE - camX + w / 2,
           (rf.y + 0.5) * TILE - camY + h / 2, 100, 0.7);
+  }
+  if (STARS.site) {
+    punch((STARS.site.x + 0.5) * TILE - camX + w / 2,
+          (STARS.site.y + 0.5) * TILE - camY + h / 2, 130, 0.8);
+  }
+  for (const wp of game.wisps) {
+    punch(wp.x - camX + w / 2, wp.y - camY + h / 2, 55, 0.6);
   }
   for (const poi of game.world.poisNear(game.player.tileX, game.player.tileY, 2)) {
     const lit = (poi.type === 'waystone' && game.state.activated.has(poi.id)) ||
@@ -980,8 +1333,16 @@ function loop(now) {
       updateShades(dt);
       updateRifts(dt);
       updateOrun(dt);
+      updateWisps(dt);
+      updateStars(dt);
     }
     game.hero.hp = Math.min(game.hero.maxHp, game.hero.hp + 1.2 * dt);
+    for (let i = game.floats.length - 1; i >= 0; i--) {
+      const fl = game.floats[i];
+      fl.t += dt;
+      if (fl.t > 1.6) game.floats.splice(i, 1);
+    }
+    if (game.rumor && game.time > game.rumor.expires) game.rumor = null;
     updateWeather(dt);
     game.audio.mood = daylight() < 0.4 ? 'night' : 'day';
     for (let i = game.iceTrail.length - 1; i >= 0; i--) {
@@ -1015,10 +1376,14 @@ function loop(now) {
     }
     drawRifts(camX, camY, t);
     if (game.mode !== 'title') {
+      drawStarSite(camX, camY, t);
       drawShades(camX, camY, t);
       drawOrun(camX, camY, t);
       game.player.draw(ctx, canvas.width / 2, canvas.height / 2, t);
       drawSparks(camX, camY);
+      drawWisps(camX, camY, t);
+      drawFloats(camX, camY);
+      drawStarStreak();
     }
     drawFireflies(camX, camY);
     if (game.mode !== 'title') drawWeather(t);

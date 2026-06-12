@@ -80,6 +80,19 @@ Pages redeploys automatically in about a minute.
 - **Waystones** attune to you. Once one knows your name, the Resonance compass
   points to the nearest waiting Shard, and any awakened Waystone can carry you
   to any other via the map.
+- **Twelve Relics.** Things the Architects dropped on the way down, each a
+  passive that bends a rule: wider crit/parry timing windows, faster travel,
+  a combo that survives one hit, a bell that hushes your scent, a lens that
+  reveals caches, a whistle that calls wisps. Found by exploring — nowhere
+  else.
+- **Reasons to wander.** Sparkling **Architect Caches** hold relics, light,
+  and permanent stat boosts. **Light wisps** dart across the land — run one
+  down for light and a full second wind. **Fallen stars** streak overhead
+  and crash nearby (a ping marks the site): salvage them fast, because the
+  dark comes to feed. **Elite Unlit** hunt you, glinting with stolen relics.
+  Awakened Waystones **gossip rumors** of undiscovered places. And every
+  discovery now pays light (XP) — scaled by how far from the Hearth you
+  dared to walk.
 - **Shard Boons.** Every claimed shard permanently reshapes how you move:
   Stonestride opens the impassable peaks of the Worldspine, Tidewalker makes
   the Deep carry you, Frostpath freezes water underfoot, Stormstep turns

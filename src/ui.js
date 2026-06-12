@@ -89,6 +89,21 @@ const UI = {
       (g.state.orunMet > 0 ? ' · the stranger has spoken ' + g.state.orunMet +
         (g.state.orunMet === 1 ? ' time' : ' times') : '') + '</div>';
 
+    const t9 = g.state.tallies;
+    html += '<div class="j-muted">' + t9.caches + ' caches opened · ' + t9.wisps +
+      ' wisps caught · ' + t9.stars + ' stars salvaged · ' + t9.elites + ' elites unmade</div>';
+
+    html += '<div class="j-section">RELICS (' + h.relics.size + ' / ' + Object.keys(RELICS).length + ')</div>';
+    if (h.relics.size === 0) {
+      html += '<div class="j-muted">The Architects dropped things on the way down. Caches sparkle. Stars fall. Elites carry what they stole.</div>';
+    } else {
+      for (const key of h.relics) {
+        const r = RELICS[key];
+        html += '<div class="j-shard"><span class="dot" style="background:' + r.color + '"></span>' +
+          r.name + ' <span class="j-muted">— ' + r.desc + '</span></div>';
+      }
+    }
+
     html += '<div class="j-section">ARTS LEARNED</div>';
     for (const [key, lv] of h.skills) {
       const def = SKILLS[key];
@@ -146,6 +161,22 @@ const UI = {
     this.el('shards').textContent = '✦ ' + g.state.shards.size + ' / 7 Shards';
     this.el('frags').textContent = '❖ ' + g.state.fragments.size + ' Fragments';
     this.el('stamina-fill').style.width = (p.stamina * 100).toFixed(1) + '%';
+
+    // pings: fallen stars and waystone rumors pull you off the road
+    let pings = '';
+    const mkPing = (tx, ty, label, col, glyph) => {
+      const dx = tx - p.tileX, dy = ty - p.tileY;
+      const ang = (Math.atan2(dy, dx) * 180 / Math.PI).toFixed(0);
+      return '<div style="color:' + col + '"><span class="ping-arrow" style="transform:rotate(' +
+        ang + 'deg)">' + glyph + '</span>' + label + ' · ' + (Math.hypot(dx, dy) | 0) + '</div>';
+    };
+    if (typeof STARS !== 'undefined' && STARS.site) {
+      pings += mkPing(STARS.site.x, STARS.site.y, 'fallen star', '#ffd27a', '➤');
+    }
+    if (g.rumor) {
+      pings += mkPing(g.rumor.x, g.rumor.y, 'rumor', '#7fd4ff', '➤');
+    }
+    this.el('pings').innerHTML = pings;
 
     const compass = this.el('compass');
     if (g.state.attuned && g.state.shards.size < 7) {
@@ -206,6 +237,27 @@ const UI = {
       ctx.fillStyle = poi.type === 'sanctum' ? (poi.shard ? poi.shard.color : '#fff')
         : poi.type === 'waystone' ? '#7fd4ff' : '#c9b27a';
       ctx.fillRect(mx - 1.5, my - 1.5, 3, 3);
+    }
+
+    // the Eye of the Folded Dark shows unopened caches
+    if (hasRelic('rift-eye')) {
+      for (const poi of g.world.poisNear(px, py, 3)) {
+        if (poi.type !== 'cache' || g.state.opened.has(poi.id)) continue;
+        const mx = W / 2 + (poi.x - px) / CHUNK * ppc;
+        const my = H / 2 + (poi.y - py) / CHUNK * ppc;
+        if (mx < 0 || my < 0 || mx > W || my > H) continue;
+        ctx.fillStyle = '#ffd27a';
+        ctx.fillRect(mx - 1.5, my - 1.5, 3, 3);
+      }
+    }
+    // a fallen star burns gold
+    if (typeof STARS !== 'undefined' && STARS.site) {
+      const mx = W / 2 + (STARS.site.x - px) / CHUNK * ppc;
+      const my = H / 2 + (STARS.site.y - py) / CHUNK * ppc;
+      if (mx > 0 && my > 0 && mx < W && my < H) {
+        ctx.fillStyle = 'rgba(255,215,130,' + (0.6 + Math.sin(performance.now() / 200) * 0.4).toFixed(2) + ')';
+        ctx.beginPath(); ctx.arc(mx, my, 4, 0, 7); ctx.fill();
+      }
     }
 
     // open rifts pulse violet

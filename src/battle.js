@@ -68,6 +68,7 @@ const Battle = {
     this.slowmo = 0;
     this.punch = 0;
     this.combo = 0;
+    this.knotUsed = false;
     this.targetIdx = 0;
     game.mode = 'battle';
     this.tierBefore = tierOf(game.hero.level);
@@ -95,19 +96,21 @@ const Battle = {
     this.xpTotal = 0;
     const spots = FOE_SPOTS[count];
     for (let i = 0; i < count; i++) {
+      const elite = !!opts.elite && i === 0;
       const color = guardian ? opts.guardianOf.shard.color
-        : ['#c46bd6', '#7a6bd6', '#d66b8e', '#6bd6c4'][(rand() * 4) | 0];
+        : elite ? '#ff5a5a'
+          : ['#c46bd6', '#7a6bd6', '#d66b8e', '#6bd6c4'][(rand() * 4) | 0];
       const arch = guardian ? ((rand() * 3) | 0) : ((rand() * 4) | 0);
       const name = guardian
         ? 'Guardian of the ' + opts.guardianOf.shard.name
-        : foeName(lvl, rand);
-      const hpMult = (count > 1 ? 0.72 : 1) * (guardian ? 1.9 : 1);
+        : foeName(lvl + (elite ? 5 : 0), rand);
+      const hpMult = (count > 1 ? 0.72 : 1) * (guardian ? 1.9 : 1) * (elite ? 1.5 : 1);
       const fd = {
-        name, level: lvl, color, guardian, arch,
+        name, level: lvl, color, guardian, arch, elite,
         ranged: arch === 3,
         maxHp: Math.max(10, Math.round((26 + 13 * lvl) * hpMult)),
-        atk: (4 + 2.1 * lvl) * (guardian ? 1.15 : 1),
-        xp: Math.round((20 + 9 * lvl) * (guardian ? 2 : 1) * (count > 1 ? 0.8 : 1)),
+        atk: (4 + 2.1 * lvl) * (guardian ? 1.15 : 1) * (elite ? 1.25 : 1),
+        xp: Math.round((20 + 9 * lvl) * (guardian ? 2 : 1) * (count > 1 ? 0.8 : 1) * (elite ? 2.5 : 1)),
         burn: 0, atkDown: 0, veiled: 0, stoneskin: 0,
         guarding: false, charged: false, sigUsed: false,
         intent: null, dead: false,
@@ -115,7 +118,8 @@ const Battle = {
       fd.hp = fd.maxHp;
       this.xpTotal += fd.xp;
       this.foesData.push(fd);
-      const scale = (1 + Math.min(0.5, lvl * 0.035)) * (guardian ? 1.45 : 1) * (count > 1 ? 0.92 : 1);
+      const scale = (1 + Math.min(0.5, lvl * 0.035)) * (guardian ? 1.45 : 1) *
+        (count > 1 ? 0.92 : 1) * (elite ? 1.3 : 1);
       this.foes.push({
         mesh: B3D.foeMesh(arch, color, guardian),
         pos: spots[i].slice(), rot: -Math.PI / 2 - 0.4 + (rand() - 0.5) * 0.3,
@@ -208,6 +212,15 @@ const Battle = {
       UI.banner('RIFT SEALED — RIFTLIGHT ' + romanNumeral(h.riftlight),
         'The tear closes around its own scream. +4% might and vitality, forever.', 5600);
     }
+    if (victory && this.opts.elite) {
+      game.state.tallies.elites++;
+      const pool = unownedRelics();
+      if (pool.length) {
+        setTimeout(() => grantRelic(pool[(Math.random() * pool.length) | 0]), 800);
+      } else {
+        setTimeout(() => grantLight(60), 800);
+      }
+    }
     if (!victory && !this.fled) {
       const h = game.hero;
       h.hp = Math.max(1, Math.round(h.maxHp * 0.5));
@@ -281,8 +294,11 @@ const Battle = {
     const q = this.qte;
     if (!q || q.done) return;
     q.done = true;
-    const hit = Math.abs(q.t - q.dur) <= (q.kind === 'crit' ? 0.16 : 0.18);
-    this._qteResolve(hit);
+    // the Navigator's Lens and the Steady Gauntlet forgive imprecision
+    const window = q.kind === 'crit'
+      ? (hasRelic('keen-eye') ? 0.26 : 0.16)
+      : (hasRelic('still-hand') ? 0.28 : 0.18);
+    this._qteResolve(Math.abs(q.t - q.dur) <= window);
   },
 
   _qteResolve(success) {
@@ -761,8 +777,13 @@ const Battle = {
       this._shock(this.hero.pos, '#7fd4ff');
       game.audio.parry();
     } else if (this.combo > 0) {
-      this.combo = 0;
-      this._updateCombo();
+      if (hasRelic('combo-knot') && !this.knotUsed) {
+        this.knotUsed = true;
+        this._text(this.hero.pos, 'the knot holds', '#e8c66a');
+      } else {
+        this.combo = 0;
+        this._updateCombo();
+      }
     }
     if (h.shield > 0) {
       const absorbed = Math.min(h.shield, dmg);
@@ -849,8 +870,9 @@ const Battle = {
   _victory() {
     const h = game.hero;
     h.battlesWon++;
-    h.xp += this.xpTotal;
-    this._text([0, 0.5, 0], '+' + this.xpTotal + ' light', '#e8c66a', true);
+    const earned = Math.round(this.xpTotal * (hasRelic('gold-sliver') ? 1.15 : 1));
+    h.xp += earned;
+    this._text([0, 0.5, 0], '+' + earned + ' light', '#e8c66a', true);
 
     let leveled = false;
     while (h.xp >= xpNeed(h.level)) {

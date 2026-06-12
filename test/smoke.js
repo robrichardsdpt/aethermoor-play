@@ -170,6 +170,90 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   console.log('orun met:', orunMet);
   await shot('orun');
 
+  /* ---------- exploration loot: cache, wisp, fallen star, elite ---------- */
+  const cachePos = await page.evaluate(() => {
+    for (let r = 0; r < 40; r++) {
+      for (let cy = -r; cy <= r; cy++) {
+        for (let cx = -r; cx <= r; cx++) {
+          if (Math.max(Math.abs(cx), Math.abs(cy)) !== r) continue;
+          for (const p of game.world.poisInChunk(cx, cy)) {
+            if (p.type === 'cache') return { x: p.x, y: p.y };
+          }
+        }
+      }
+    }
+    return null;
+  });
+  console.log('cache found:', JSON.stringify(cachePos));
+  await page.evaluate((c) => {
+    game.player.x = (c.x + 0.5) * 16;
+    game.player.y = (c.y + 1.5) * 16;
+  }, cachePos);
+  await sleep(500);
+  await shot('cache');
+  const beforeCache = await page.evaluate(() => game.hero.xp + game.hero.relics.size * 1000 + game.hero.atk + game.hero.maxHp);
+  await page.keyboard.press('KeyE');
+  await sleep(600);
+  const cacheRes = await page.evaluate(() => ({
+    opened: game.state.opened.size,
+    gained: (game.hero.xp + game.hero.relics.size * 1000 + game.hero.atk + game.hero.maxHp),
+  }));
+  console.log('cache opened:', cacheRes.opened === 1, 'reward:', cacheRes.gained > beforeCache);
+
+  const wispRes = await page.evaluate(() => {
+    game.player.stamina = 0.2;
+    game.wisps.push({ x: game.player.x + 6, y: game.player.y, age: 1, ph: 0, wanderA: 0 });
+    return true;
+  });
+  await sleep(600);
+  const wisp = await page.evaluate(() => ({
+    caught: game.state.tallies.wisps, stamina: game.player.stamina,
+  }));
+  console.log('wisp:', JSON.stringify(wisp));
+
+  // a star falls right next to us
+  await page.evaluate(() => {
+    STARS.site = { x: game.player.tileX + 2, y: game.player.tileY, expires: game.time + 200 };
+    game.battleGrace = 0;
+  });
+  await sleep(400);
+  await shot('star');
+  await page.keyboard.press('KeyE');
+  await sleep(2600);                                   // ambush may follow
+  if (await page.evaluate(() => game.mode === 'battle')) {
+    console.log('star ambush triggered — fighting');
+    if (!(await fightUntilCards(120))) { console.log('FAIL: ambush fight stalled'); process.exit(1); }
+    await page.keyboard.press('Digit1');
+    await sleep(800);
+  }
+  const starRes = await page.evaluate(() => ({
+    stars: game.state.tallies.stars, mode: game.mode,
+  }));
+  console.log('star salvaged:', JSON.stringify(starRes));
+
+  // an elite carries something that glints
+  await page.evaluate(() => {
+    game.battleGrace = 0;
+    game.shades.push({
+      x: game.player.x + 10, y: game.player.y, level: 6, elite: true,
+      wob: 0, wanderA: 0,
+    });
+  });
+  await sleep(800);
+  const inElite = await page.evaluate(() => ({
+    mode: game.mode,
+    elite: game.mode === 'battle' && Battle.foesData[0].elite,
+    name: game.mode === 'battle' ? Battle.foesData[0].name : null,
+  }));
+  console.log('elite battle:', JSON.stringify(inElite));
+  if (!(await fightUntilCards(120))) { console.log('FAIL: elite fight stalled'); process.exit(1); }
+  await page.keyboard.press('Digit1');
+  await sleep(1400);
+  const eliteRes = await page.evaluate(() => ({
+    elites: game.state.tallies.elites, relics: game.hero.relics.size,
+  }));
+  console.log('after elite:', JSON.stringify(eliteRes));
+
   /* ---------- Orun: the secret ending at the Hearth ---------- */
   await page.evaluate(() => {
     for (const s of LORE.SHARDS) game.state.shards.add(s.key);
@@ -200,7 +284,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const saved = await page.evaluate(() => {
     saveGame();
     const d = JSON.parse(localStorage.getItem('aethermoor:' + game.world.seed));
-    return { orunGifted: d.orunGifted, riftlight: d.hero.riftlight };
+    return {
+      orunGifted: d.orunGifted, riftlight: d.hero.riftlight,
+      relics: (d.hero.relics || []).length, tallies: d.tallies,
+    };
   });
   console.log('saved:', JSON.stringify(saved));
 
@@ -215,6 +302,13 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     console.log('FAIL: rift not sealed properly'); process.exit(1);
   }
   if (orunMet < 1) { console.log('FAIL: Orun encounter did not trigger'); process.exit(1); }
+  if (cacheRes.opened !== 1 || cacheRes.gained <= beforeCache) {
+    console.log('FAIL: cache gave nothing'); process.exit(1);
+  }
+  if (wisp.caught !== 1 || wisp.stamina < 0.9) { console.log('FAIL: wisp not caught'); process.exit(1); }
+  if (starRes.stars !== 1) { console.log('FAIL: star not salvaged'); process.exit(1); }
+  if (!inElite.elite || eliteRes.elites !== 1) { console.log('FAIL: elite battle broken'); process.exit(1); }
+  if (eliteRes.relics < 1) { console.log('FAIL: elite dropped no relic'); process.exit(1); }
   if (!ending.gifted || !ending.hasArt || !ending.overlay) {
     console.log('FAIL: secret ending incomplete'); process.exit(1);
   }

@@ -152,6 +152,10 @@ class World {
       type: 'waystone', id: 'waystone:' + x + ',' + y, x, y,
       name: nameWaystone(r),
     }));
+    this._tryPlace(pois, rand, cx, cy, 0.07, (x, y, r) => ({
+      type: 'cache', id: 'cache:' + x + ',' + y, x, y,
+      name: 'Architect’s Cache',
+    }));
     this.poiCache.set(key, pois);
     return pois;
   }
