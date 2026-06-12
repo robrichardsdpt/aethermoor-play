@@ -91,7 +91,8 @@ const UI = {
 
     const t9 = g.state.tallies;
     html += '<div class="j-muted">' + t9.caches + ' caches opened · ' + t9.wisps +
-      ' wisps caught · ' + t9.stars + ' stars salvaged · ' + t9.elites + ' elites unmade</div>';
+      ' wisps caught · ' + t9.stars + ' stars salvaged · ' + t9.elites +
+      ' elites unmade · ' + g.state.cores + ' vault cores</div>';
 
     html += '<div class="j-section">RELICS (' + h.relics.size + ' / ' + Object.keys(RELICS).length + ')</div>';
     if (h.relics.size === 0) {
@@ -149,8 +150,13 @@ const UI = {
 
   updateHUD() {
     const g = this.game, p = g.player;
-    this.el('loc').textContent = BIOMES[p.biome()].name.toUpperCase();
-    this.el('timeofday').textContent = g.timeLabel();
+    if (Vault.active) {
+      this.el('loc').textContent = Vault.name.toUpperCase();
+      this.el('timeofday').textContent = 'beneath the world';
+    } else {
+      this.el('loc').textContent = BIOMES[p.biome()].name.toUpperCase();
+      this.el('timeofday').textContent = g.timeLabel();
+    }
     const h = g.hero;
     const tier = TIERS[tierOf(h.level)];
     this.el('hero-line').textContent =
@@ -162,6 +168,12 @@ const UI = {
     this.el('frags').textContent = '❖ ' + g.state.fragments.size + ' Fragments';
     this.el('stamina-fill').style.width = (p.stamina * 100).toFixed(1) + '%';
 
+    if (Vault.active) {
+      this.el('pings').innerHTML = '';
+      this.el('compass').classList.add('hidden');
+      this.el('stamina-fill').style.width = (p.stamina * 100).toFixed(1) + '%';
+      return;
+    }
     // pings: fallen stars and waystone rumors pull you off the road
     let pings = '';
     const mkPing = (tx, ty, label, col, glyph) => {
@@ -202,6 +214,7 @@ const UI = {
     const c = this.el('minimap');
     const ctx = c.getContext('2d');
     const W = c.width, H = c.height;
+    if (Vault.active) { Vault.drawMinimap(ctx, W, H); return; }
     ctx.fillStyle = '#05070d';
     ctx.fillRect(0, 0, W, H);
 

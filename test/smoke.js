@@ -254,6 +254,90 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   }));
   console.log('after elite:', JSON.stringify(eliteRes));
 
+  /* ---------- the Vault: descend, loot, take the Core, climb out ---------- */
+  const door = await page.evaluate(() => game.world.firstVault);
+  console.log('vault door:', JSON.stringify(door));
+  await page.evaluate((d) => {
+    game.player.x = (d.x + 0.5) * 16;
+    game.player.y = (d.y + 1.5) * 16;
+    game.battleGrace = 5;
+  }, door);
+  await sleep(400);
+  await page.keyboard.press('KeyE');
+  await sleep(900);
+  const inVault = await page.evaluate(() => ({
+    mode: game.mode, active: Vault.active, rooms: Vault.rooms.length,
+    wardens: Vault.wardens.length, name: Vault.name,
+  }));
+  console.log('descended:', JSON.stringify(inVault));
+  await shot('vault');
+
+  // clear the patrols for a deterministic run, then kindle and loot
+  await page.evaluate(() => { Vault.wardens = []; });
+  const brazier = await page.evaluate(() => {
+    const b = Vault.braziers[0];
+    if (b) { game.player.x = (b.x + 0.5) * 16; game.player.y = (b.y + 0.5) * 16; }
+    return !!b;
+  });
+  if (brazier) {
+    await sleep(300);
+    await page.keyboard.press('KeyE');
+    await sleep(400);
+    console.log('brazier lit:', await page.evaluate(() => Vault.braziers[0].lit));
+  }
+  const chest = await page.evaluate(() => {
+    const ch = Vault.chests[0];
+    if (ch) { game.player.x = (ch.x + 0.5) * 16; game.player.y = (ch.y + 0.5) * 16; }
+    return !!ch;
+  });
+  if (chest) {
+    await sleep(300);
+    await page.keyboard.press('KeyE');
+    await sleep(400);
+    console.log('chest opened:', await page.evaluate(() => Vault.chests[0].opened));
+  }
+
+  // the Custodian Prime
+  await page.evaluate(() => {
+    game.player.x = (Vault.core.x + 1.5) * 16;
+    game.player.y = (Vault.core.y + 0.5) * 16;
+  });
+  await sleep(400);
+  await page.keyboard.press('KeyE');
+  await sleep(1600);
+  console.log('prime:', JSON.stringify(await page.evaluate(() => ({
+    mode: game.mode, foe: Battle.foesData[0] && Battle.foesData[0].name,
+  }))));
+  await shot('prime');
+  if (!(await fightUntilCards(120))) { console.log('FAIL: prime fight stalled'); process.exit(1); }
+  await page.keyboard.press('Digit1');
+  await sleep(1200);
+  const primeDown = await page.evaluate(() => ({
+    mode: game.mode, primeDown: Vault.core.primeDown,
+  }));
+  console.log('after prime:', JSON.stringify(primeDown));
+  await page.keyboard.press('KeyE');           // take the Core
+  await sleep(800);
+  const coreRes = await page.evaluate(() => ({
+    cores: game.state.cores, cleared: game.state.clearedVaults.size,
+    vaults: game.state.tallies.vaults,
+  }));
+  console.log('core claimed:', JSON.stringify(coreRes));
+
+  // climb back to the sky
+  await page.evaluate(() => {
+    game.player.x = (Vault.entrance.x + 0.5) * 16;
+    game.player.y = (Vault.entrance.y + 0.5) * 16;
+  });
+  await sleep(300);
+  await page.keyboard.press('KeyE');
+  await sleep(500);
+  const surfaced = await page.evaluate((d) => ({
+    mode: game.mode,
+    backAtDoor: Math.hypot(game.player.x / 16 - d.x, game.player.y / 16 - d.y) < 4,
+  }), door);
+  console.log('surfaced:', JSON.stringify(surfaced));
+
   /* ---------- Orun: the secret ending at the Hearth ---------- */
   await page.evaluate(() => {
     for (const s of LORE.SHARDS) game.state.shards.add(s.key);
@@ -309,6 +393,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   if (starRes.stars !== 1) { console.log('FAIL: star not salvaged'); process.exit(1); }
   if (!inElite.elite || eliteRes.elites !== 1) { console.log('FAIL: elite battle broken'); process.exit(1); }
   if (eliteRes.relics < 1) { console.log('FAIL: elite dropped no relic'); process.exit(1); }
+  if (!inVault.active || inVault.rooms < 4) { console.log('FAIL: vault did not generate'); process.exit(1); }
+  if (coreRes.cores !== 1 || coreRes.cleared !== 1) { console.log('FAIL: vault core not claimed'); process.exit(1); }
+  if (surfaced.mode !== 'playing' || !surfaced.backAtDoor) { console.log('FAIL: vault exit broken'); process.exit(1); }
   if (!ending.gifted || !ending.hasArt || !ending.overlay) {
     console.log('FAIL: secret ending incomplete'); process.exit(1);
   }

@@ -89,8 +89,10 @@ const Battle = {
     this.cds = {};
 
     const theme = guardian ? B3D.THEMES.void
-      : B3D.themeForBiome(game.player.biome());
-    const accent = guardian ? opts.guardianOf.shard.color : theme.mote;
+      : opts.vault ? B3D.THEMES.crag
+        : B3D.themeForBiome(game.player.biome());
+    const accent = guardian ? opts.guardianOf.shard.color
+      : opts.vault ? '#6bd6c4' : theme.mote;
 
     this.foes = []; this.foesData = []; this.shadows = [];
     this.xpTotal = 0;
@@ -100,10 +102,13 @@ const Battle = {
       const color = guardian ? opts.guardianOf.shard.color
         : elite ? '#ff5a5a'
           : ['#c46bd6', '#7a6bd6', '#d66b8e', '#6bd6c4'][(rand() * 4) | 0];
-      const arch = guardian ? ((rand() * 3) | 0) : ((rand() * 4) | 0);
+      const arch = guardian ? ((rand() * 3) | 0)
+        : opts.vault ? 1 : ((rand() * 4) | 0);   // vault custodians are constructs
       const name = guardian
         ? 'Guardian of the ' + opts.guardianOf.shard.name
-        : foeName(lvl + (elite ? 5 : 0), rand);
+        : opts.vaultPrime ? 'Custodian Prime'
+          : opts.vault ? 'Hollow Custodian'
+            : foeName(lvl + (elite ? 5 : 0), rand);
       const hpMult = (count > 1 ? 0.72 : 1) * (guardian ? 1.9 : 1) * (elite ? 1.5 : 1);
       const fd = {
         name, level: lvl, color, guardian, arch, elite,
@@ -162,11 +167,15 @@ const Battle = {
     this._updateCombo();
     this._log(guardian
       ? 'The ' + this.foesData[0].name + ' rises from the dais. The shard will not be given.'
-      : opts.rift
-        ? 'You step through. The rift screams. ' + (count > 1 ? 'Things answer.' : this.foesData[0].name + ' answers.')
-        : count > 1
-          ? 'The dark congeals into ' + count + ' hungry shapes.'
-          : 'The dark congeals. ' + this.foesData[0].name + ' bars your way.');
+      : opts.vaultPrime
+        ? 'The Custodian Prime unfolds from its watch. It has been polishing this moment for an age.'
+        : opts.vault
+          ? 'The Custodian notes your trespass, politely, and attacks.'
+          : opts.rift
+            ? 'You step through. The rift screams. ' + (count > 1 ? 'Things answer.' : this.foesData[0].name + ' answers.')
+            : count > 1
+              ? 'The dark congeals into ' + count + ' hungry shapes.'
+              : 'The dark congeals. ' + this.foesData[0].name + ' bars your way.');
 
     this.phase = 'intro';
     this.queue = [
@@ -192,8 +201,12 @@ const Battle = {
     document.getElementById('skill-choice').classList.add('hidden');
     document.getElementById('hud').classList.remove('hidden');
     document.getElementById('minimap').classList.remove('hidden');
-    game.mode = 'playing';
+    if (!victory && !this.fled && Vault.active) Vault.abandon();
+    game.mode = Vault.active ? 'vault' : 'playing';
     game.battleGrace = 4;
+
+    if (victory && this.opts.warden) Vault.removeWarden(this.opts.warden);
+    if (victory && this.opts.vaultPrime) Vault.primeDefeated();
 
     if (this.opts.shade) {
       const i = game.shades.indexOf(this.opts.shade);

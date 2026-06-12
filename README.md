@@ -85,6 +85,15 @@ Pages redeploys automatically in about a minute.
   a combo that survives one hit, a bell that hushes your scent, a lens that
   reveals caches, a whistle that calls wisps. Found by exploring — nowhere
   else.
+- **The Vaults.** The Vessel folded itself down into the world — and its
+  chambers are still down there, humming. Hex doors set into the earth lead
+  to procedurally generated dungeons: pitch-dark rooms revealed by your
+  lantern, **braziers** that light whole chambers, **void snares**,
+  **sealed chests**, patrolling **Hollow Custodians**, and at the heart a
+  **Vault Core** on a pedestal behind a **Custodian Prime**. Each core is a
+  permanent +3% might and vitality, big light, and often a relic. One vault
+  door always waits within reach of the Last Hearth; rarer doors are
+  scattered across the far lands. Cleared vaults sleep forever.
 - **Reasons to wander.** Sparkling **Architect Caches** hold relics, light,
   and permanent stat boosts. **Light wisps** dart across the land — run one
   down for light and a full second wind. **Fallen stars** streak overhead

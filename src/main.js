@@ -78,7 +78,9 @@ function newState() {
     orunMet: 0,                // how many times the stranger has spoken
     orunGifted: false,
     opened: new Set(),         // cache ids already looted
-    tallies: { caches: 0, wisps: 0, elites: 0, stars: 0 },
+    tallies: { caches: 0, wisps: 0, elites: 0, stars: 0, vaults: 0 },
+    cores: 0,                  // vault cores claimed
+    clearedVaults: new Set(),
   };
 }
 
@@ -142,9 +144,12 @@ function saveKey(seed) { return 'aethermoor:' + seed; }
 function saveGame() {
   const s = game.state;
   const h = game.hero;
+  // mid-vault, save the spot on the surface where the door stands
+  const px = Vault.active ? Vault.returnPos.x : game.player.x;
+  const py = Vault.active ? Vault.returnPos.y : game.player.y;
   try {
     localStorage.setItem(saveKey(game.world.seed), JSON.stringify({
-      x: game.player.x, y: game.player.y, time: game.time,
+      x: px, y: py, time: game.time,
       shards: [...s.shards], fragments: [...s.fragments],
       discovered: [...s.discovered], discoveredNames: s.discoveredNames,
       activated: [...s.activated], attuned: s.attuned,
@@ -156,6 +161,7 @@ function saveGame() {
       },
       orunMet: s.orunMet, orunGifted: s.orunGifted,
       opened: [...s.opened], tallies: s.tallies,
+      cores: s.cores, clearedVaults: [...s.clearedVaults],
     }));
   } catch (e) { /* storage full or blocked — the journey continues unsaved */ }
 }
@@ -179,7 +185,9 @@ function loadGame(seed) {
   s.orunMet = data.orunMet || 0;
   s.orunGifted = !!data.orunGifted;
   s.opened = new Set(data.opened || []);
-  s.tallies = data.tallies || { caches: 0, wisps: 0, elites: 0, stars: 0 };
+  s.tallies = data.tallies || { caches: 0, wisps: 0, elites: 0, stars: 0, vaults: 0 };
+  s.cores = data.cores || 0;
+  s.clearedVaults = new Set(data.clearedVaults || []);
   if (data.hero) {
     const h = game.hero;
     h.level = data.hero.level; h.xp = data.hero.xp;
@@ -231,7 +239,10 @@ window.addEventListener('keydown', (e) => {
 
   switch (e.code) {
     case 'KeyE': pressE(); break;
-    case 'KeyM': UI.toggleMap(); break;
+    case 'KeyM':
+      if (game.mode === 'vault') UI.banner('NO SKY HERE', 'The vault is its own map. Watch the small circle.', 2600);
+      else UI.toggleMap();
+      break;
     case 'KeyJ': UI.toggleJournal(); break;
     case 'KeyH': document.getElementById('help').classList.toggle('hidden'); break;
     case 'KeyP': {
@@ -247,12 +258,13 @@ window.addEventListener('blur', () => game.keys.clear());
 
 /** The single "examine" action, shared by the E key and the touch rune. */
 function pressE() {
-  if (game.mode !== 'playing') return;
+  if (game.mode !== 'playing' && game.mode !== 'vault') return;
   if (!document.getElementById('lore-modal').classList.contains('hidden')) {
     document.getElementById('lore-modal').classList.add('hidden');
     game.audio.closeBook();
   } else if (!UI.anyOpen()) {
-    interact();
+    if (game.mode === 'vault') Vault.interact();
+    else interact();
   }
 }
 
@@ -372,6 +384,13 @@ function interact() {
         }
       }
       saveGame();
+    }
+
+  } else if (poi.type === 'vault') {
+    if (s.clearedVaults.has(poi.id)) {
+      UI.banner(poi.name.toUpperCase(), LORE.VAULT_SLEEPS, 3400);
+    } else {
+      Vault.enter(poi);
     }
 
   } else if (poi.type === 'sanctum') {
@@ -584,6 +603,7 @@ function updateNearbyPoi() {
   if (best.type === 'monolith') text = 'E — read the Monolith';
   else if (best.type === 'ruin') text = 'E — search the ruins';
   else if (best.type === 'cache') text = s.opened.has(best.id) ? null : '✶ E — open the Architect’s cache';
+  else if (best.type === 'vault') text = s.clearedVaults.has(best.id) ? 'E — the vault sleeps' : '▼ E — descend into ' + best.name;
   else if (best.type === 'waystone') text = s.activated.has(best.id) ? 'E — ask the Waystone for rumors' : 'E — attune to the Waystone';
   else if (best.type === 'sanctum' && !s.shards.has(best.shard.key)) text = '⚔ E — challenge the Guardian of the ' + best.shard.name;
   UI.prompt(text);
@@ -1166,6 +1186,29 @@ function drawPOI(poi, sx, sy, t) {
       }
       ctx.restore();
     }
+  } else if (poi.type === 'vault') {
+    const sleeping = s.clearedVaults.has(poi.id);
+    // a hex door set flat into the earth
+    ctx.fillStyle = sleeping ? '#1c2230' : '#141b2c';
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2 + Math.PI / 6;
+      const px2 = sx + Math.cos(a) * 13, py2 = sy + Math.sin(a) * 9;
+      i === 0 ? ctx.moveTo(px2, py2) : ctx.lineTo(px2, py2);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = sleeping ? 'rgba(110,120,140,0.5)'
+      : 'rgba(107,214,196,' + (0.5 + Math.sin(t * 2) * 0.3).toFixed(2) + ')';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    if (!sleeping) {
+      ctx.strokeStyle = 'rgba(107,214,196,0.35)';
+      ctx.beginPath();
+      ctx.moveTo(sx - 7, sy); ctx.lineTo(sx + 7, sy);
+      ctx.moveTo(sx, sy - 5); ctx.lineTo(sx, sy + 5);
+      ctx.stroke();
+    }
   } else if (poi.type === 'waystone') {
     const active = s.activated.has(poi.id);
     if (active) {
@@ -1322,6 +1365,17 @@ function loop(now) {
     game.audio.mood = 'battle';
     Battle.update(dt);
     Battle.render();
+    requestAnimationFrame(loop);
+    return;
+  }
+
+  if (game.mode === 'vault') {
+    // beneath the world, the sky's clock means nothing
+    game.audio.mood = 'night';
+    Vault.update(dt);
+    Vault.render(t);
+    UI.updateHUD();
+    UI.drawMinimap();
     requestAnimationFrame(loop);
     return;
   }

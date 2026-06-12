@@ -22,6 +22,8 @@ const BIOMES = {
   rock:    { rgb: [118, 114, 110], walk: 0.65, name: 'the Broken Crags' },
   peak:    { rgb: [198, 202, 210], walk: 0,    name: 'the Worldspine' },
   dais:    { rgb: [165, 155, 136], walk: 1.00, name: 'an Ancient Dais' },
+  vfloor:  { rgb: [24, 32, 46],    walk: 1.00, name: 'the Vessel’s Halls' },
+  vwall:   { rgb: [10, 14, 24],    walk: 0,    name: 'the Vessel’s Halls' },
 };
 
 const LAND_BIOMES = new Set(['grass', 'savanna', 'forest', 'jungle', 'desert',
@@ -36,6 +38,21 @@ class World {
     this.poiCache = new Map();        // "cx,cy" -> array of POIs
     this.sanctums = this._placeSanctums();
     this.spawn = this._findLand(0, 0, 400) || { x: 0, y: 0 };
+    this.firstVault = this._placeFirstVault();
+  }
+
+  /** One vault door is always within reach of the Hearth. */
+  _placeFirstVault() {
+    const rand = mulberry32(this.seed ^ 0x7A17);
+    const a = rand() * Math.PI * 2;
+    const r = 65 + rand() * 30;
+    const ix = Math.round(this.spawn.x + Math.cos(a) * r);
+    const iy = Math.round(this.spawn.y + Math.sin(a) * r);
+    const pos = this._findLand(ix, iy, 120) || { x: ix, y: iy };
+    return {
+      type: 'vault', id: 'vault:' + pos.x + ',' + pos.y,
+      x: pos.x, y: pos.y, name: nameVault(rand),
+    };
   }
 
   /* ---------------- terrain ---------------- */
@@ -156,6 +173,10 @@ class World {
       type: 'cache', id: 'cache:' + x + ',' + y, x, y,
       name: 'Architect’s Cache',
     }));
+    this._tryPlace(pois, rand, cx, cy, 0.022, (x, y, r) => ({
+      type: 'vault', id: 'vault:' + x + ',' + y, x, y,
+      name: nameVault(r),
+    }));
     this.poiCache.set(key, pois);
     return pois;
   }
@@ -180,6 +201,10 @@ class World {
     for (const s of this.sanctums) {
       if (Math.abs(s.x - tx) < (r + 1) * CHUNK && Math.abs(s.y - ty) < (r + 1) * CHUNK)
         out.push(s);
+    }
+    const v = this.firstVault;
+    if (v && Math.abs(v.x - tx) < (r + 1) * CHUNK && Math.abs(v.y - ty) < (r + 1) * CHUNK) {
+      out.push(v);
     }
     return out;
   }

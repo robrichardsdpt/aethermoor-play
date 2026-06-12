@@ -92,6 +92,31 @@ LORE.WAYSTONE_LINE = 'The Waystone wakes beneath your palm. Far away — in ever
 LORE.WAYSTONE_AGAIN = 'The stone hums, content. It remembers your shape.';
 
 /* ------------------------------------------------------------------ */
+/* The Vaults: chambers of the Vessel, still humming underground       */
+/* ------------------------------------------------------------------ */
+
+LORE.VAULT_ENTER = [
+  'The door reads your shape and steps aside. Below, the Vessel is still humming — patiently, in the dark, to itself.',
+  'Stairs the Architects never needed, cut afterward by smaller hands. The air below tastes of metal and very old purpose.',
+  'The dark inside is not empty. It is furnished. Somewhere deep, something keeps the floors swept.',
+  'A breath of warm air rises past you, regular as a pulse. The Vessel does not know it landed.',
+];
+
+LORE.VAULT_CORE =
+  'The core comes free with a sound like a held breath ending. The lights bank low, ' +
+  'the hum winds down a final octave, and the chamber — for the first time in an age — rests. ' +
+  'Somewhere far above, the wind changes.';
+
+LORE.VAULT_SLEEPS = 'The vault sleeps now. Its door remembers you fondly, and stays shut.';
+
+const VAULT_EPITHET = ['Sunken', 'Sealed', 'Humming', 'Patient', 'Folded',
+  'Sleeping', 'Listening', 'Anchored', 'Unlit', 'Waiting'];
+
+function nameVault(rand) {
+  return 'The ' + VAULT_EPITHET[(rand() * VAULT_EPITHET.length) | 0] + ' Vault';
+}
+
+/* ------------------------------------------------------------------ */
 /* Orun-of-the-Steady-Hands, the last Architect                        */
 /* ------------------------------------------------------------------ */
 
