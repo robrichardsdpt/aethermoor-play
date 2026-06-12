@@ -3,11 +3,13 @@
 An infinite, procedurally generated world-exploration game. No build step, no
 dependencies, no assets — pure HTML5 canvas, vanilla JavaScript, and WebAudio.
 
-> Before the first dawn there was only the First Light, held aloft in the Lumen
-> Spire by the Architects of old. When the Spire was broken in the Sundering,
-> the Light burst into seven shards and the world tore itself into endless
-> wandering lands. You are the last Wayfarer of the Last Hearth. Walk the
-> broken world. Find the seven Shards. Relight the dark.
+> Before the first dawn, the Architects crossed the dark between stars,
+> carrying the First Light — the captive heart of their dead home star — and
+> grew a world around it. Something followed them across the void. When the
+> Spire broke in the Sundering, the Light burst into seven shards and the
+> world tore itself into endless wandering lands. You are the last Wayfarer
+> of the Last Hearth. Find the seven Shards. Relight the dark — before what
+> followed them finds it first.
 
 ## Play
 
@@ -51,11 +53,20 @@ Pages redeploys automatically in about a minute.
 - **Seven Shard Sanctums** ring your starting point at increasing distances —
   and a **Guardian** coils around every one. Defeat all seven to restore the
   First Light.
-- **3D battles in the Umbra.** When the Unlit catch you (or you challenge a
-  Guardian), you're pulled into a shadow-realm arena rendered by a tiny
-  hand-rolled software-3D engine — flat-shaded low-poly, glowing runes,
-  orbiting camera, particles, screen shake. Turn-based: Strike, the Arts,
-  guard-breaks, burns, shields, veils, counters. Flee if you must.
+- **3D battles in the Umbra** — the folded nothing the Architects once
+  sailed. A hand-rolled software-3D engine: flat-shaded low-poly with depth
+  fog, soft shadows, a shattered moon, nebulae, drifting motes, shockwaves,
+  slash arcs, an intro camera sweep, impact punch-ins, and slow-motion kill
+  blows. Arenas are themed by the biome where the dark caught you.
+- **Turn-based with reflexes.** Every attack opens a timing ring — strike
+  as it closes for a **critical**; when a foe lashes out, time it to
+  **parry**. Crits and parries build a **combo** that multiplies your
+  damage until you get hit.
+- **Packs and intents.** The Unlit hunt in groups of up to three, each
+  telegraphing its next move (strike, guard, gathering darkness, void
+  bolt, devour) — read the intents, pick your target (Tab or tap), shield
+  before the heavy hits. Stormcall now arcs across the whole pack, and the
+  new Hollow Casters bombard you from range.
 - **Every victory teaches you.** After each win, choose one of three cards:
   learn a new Art (Emberlash, Tidebind, Stoneward, Stormcall, Frostbite,
   Duskveil, Dawnstrike), upgrade one you know, or harden your body.

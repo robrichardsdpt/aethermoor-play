@@ -257,6 +257,17 @@ html, body {
 .b-bar.foe { direction: rtl; }
 .b-sub { font-size: 14px; font-style: italic; opacity: 0.85; margin-top: 3px; text-shadow: 0 1px 3px #000; }
 
+#b-combo {
+  position: absolute; top: 96px; left: 50%; transform: translateX(-50%);
+  font-family: 'Cinzel', serif; font-size: 26px; letter-spacing: 4px;
+  color: var(--gold); text-shadow: var(--glow), 0 2px 8px #000;
+}
+#b-combo.pop { animation: comboPop 0.3s ease-out; }
+@keyframes comboPop {
+  0% { transform: translateX(-50%) scale(1.6); }
+  100% { transform: translateX(-50%) scale(1); }
+}
+
 #b-log {
   position: absolute; bottom: 118px; left: 50%; transform: translateX(-50%);
   max-width: 70vw; text-align: center;

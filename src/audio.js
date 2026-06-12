@@ -245,6 +245,19 @@ class AudioEngine {
     [523, 659, 784].forEach((f, i) => this._note(f, i * 0.07, 0.8, 0.07, 'triangle'));
   }
 
+  crit() {
+    this.hit(true);
+    this._note(1318, 0, 0.4, 0.1);
+    this._note(1760, 0.05, 0.5, 0.08);
+  }
+
+  parry() {
+    if (!this.ctx) return;
+    this._note(880, 0, 0.18, 0.12, 'square');
+    this._note(1320, 0.03, 0.3, 0.07, 'triangle');
+    this._hat(this.ctx.currentTime);
+  }
+
   toggleMute() {
     this.muted = !this.muted;
     if (this.master) this.master.gain.value = this.muted ? 0 : 0.5;

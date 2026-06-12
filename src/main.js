@@ -181,6 +181,8 @@ window.addEventListener('keydown', (e) => {
   }
   if (game.mode === 'battle') {
     if (e.code.startsWith('Digit')) Battle.hotkey(parseInt(e.code.slice(5), 10));
+    else if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); Battle.qteInput(); }
+    else if (e.code === 'Tab') { e.preventDefault(); Battle.cycleTarget(); }
     else if (e.code === 'KeyP') game.audio.toggleMute();
     return;
   }

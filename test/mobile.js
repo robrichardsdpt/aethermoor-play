@@ -85,18 +85,19 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   console.log('tap-to-challenge:', JSON.stringify(inBattle));
   await shot('m-battle');
 
-  // fight by tapping the first action button
-  for (let i = 0; i < 40; i++) {
+  // fight by tapping action buttons, riding the timing ring with screen taps
+  for (let i = 0; i < 80; i++) {
     const st = await page.evaluate(() => ({
-      phase: Battle.phase,
+      phase: Battle.phase, qte: !!Battle.qte,
       cards: !document.getElementById('skill-choice').classList.contains('hidden'),
     }));
     if (st.cards) break;
-    if (st.phase === 'player') {
+    if (st.qte) await page.touchscreen.tap(195, 420);
+    else if (st.phase === 'player') {
       const b = await page.$('#b-actions button');
       if (b) await b.tap();
     }
-    await sleep(420);
+    await sleep(350);
   }
   await shot('m-cards');
   const card = await page.$('#skill-cards .card');

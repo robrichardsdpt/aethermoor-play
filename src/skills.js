@@ -88,12 +88,12 @@ function xpNeed(level) {
   return Math.round(35 * Math.pow(1.38, level - 1));
 }
 
-/* Names for the things that hunt you, scaled by menace. */
+/* Names for the things that followed the Architects here, by menace. */
 const FOE_RANKS = [
-  { min: 1, names: ['Umbral Shade', 'Hollow Wisp', 'Grief of the Grey Years'] },
-  { min: 4, names: ['Unlit Sentinel', 'Barrow Stalker', 'Echo of the Sundering'] },
-  { min: 8, names: ['Devourer of Hearths', 'The Center’s Absence', 'Nightmaw'] },
-  { min: 13, names: ['Herald of the Unlit Sea', 'What the Spire Became', 'The Long Dark'] },
+  { min: 1, names: ['Voidspawn', 'Hollow Wisp', 'Grief of the Grey Years'] },
+  { min: 4, names: ['Unlit Sentinel', 'Star-Eater Spawn', 'Echo of the Sundering'] },
+  { min: 8, names: ['Devourer of Hearths', 'What Wears Our Shape', 'Nightmaw'] },
+  { min: 13, names: ['Herald of the Hungry Void', 'What Followed Them Here', 'The Long Dark Between Stars'] },
 ];
 
 function foeName(level, rand) {

@@ -29,13 +29,14 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const fightUntilCards = async (max) => {
     for (let i = 0; i < max; i++) {
       const st = await page.evaluate(() => ({
-        phase: Battle.phase, mode: game.mode,
+        phase: Battle.phase, mode: game.mode, qte: !!Battle.qte,
         cards: !document.getElementById('skill-choice').classList.contains('hidden'),
       }));
       if (st.cards) return true;
       if (st.mode !== 'battle') return false;
-      if (st.phase === 'player') await page.keyboard.press('Digit1');
-      await sleep(420);
+      if (st.qte) await page.keyboard.press('Space');        // ride the timing ring
+      else if (st.phase === 'player') await page.keyboard.press('Digit1');
+      await sleep(350);
     }
     return false;
   };
@@ -51,21 +52,40 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   /* ---------- ordinary battle at level 1 ---------- */
   await page.evaluate(() => { Battle.start({ level: 1 }); });
-  await sleep(2000);
+  await sleep(2200);
   await shot('battle');
-  if (!(await fightUntilCards(40))) { console.log('FAIL: battle 1 never reached cards'); process.exit(1); }
+  if (!(await fightUntilCards(100))) { console.log('FAIL: battle 1 never reached cards'); process.exit(1); }
   await shot('cards');
   await page.keyboard.press('Digit1');
   await sleep(700);
   const afterB1 = await page.evaluate(() => ({
     mode: game.mode, won: game.hero.battlesWon, skills: game.hero.skills.size,
-    maxHp: game.hero.maxHp, atk: game.hero.atk,
+    maxHp: game.hero.maxHp, atk: game.hero.atk, combo: Battle.combo,
   }));
   console.log('after battle 1:', JSON.stringify(afterB1));
 
-  /* ---------- guardian battle: claim a shard ---------- */
+  /* ---------- a pack of three, with intents and targeting ---------- */
   await page.evaluate(() => {
     game.hero.atk = 500; game.hero.maxHp = 600; game.hero.hp = 600;
+    Battle.start({ level: 8, count: 3 });
+  });
+  await sleep(2400);
+  const pack = await page.evaluate(() => ({
+    foes: Battle.foesData.length,
+    names: Battle.foesData.map((f) => f.name),
+  }));
+  console.log('pack battle:', JSON.stringify(pack));
+  await shot('pack');
+  await page.evaluate(() => Battle.cycleTarget());
+  const cycled = await page.evaluate(() => Battle.targetIdx);
+  if (!(await fightUntilCards(120))) { console.log('FAIL: pack battle never reached cards'); process.exit(1); }
+  await page.keyboard.press('Digit1');
+  await sleep(700);
+  console.log('pack won, target cycling worked:', cycled === 1,
+    'battlesWon:', await page.evaluate(() => game.hero.battlesWon));
+
+  /* ---------- guardian battle: claim a shard ---------- */
+  await page.evaluate(() => {
     const s = game.world.sanctums[0];
     game.player.x = (s.x + 0.5) * 16;
     game.player.y = (s.y + 2.5) * 16;
@@ -77,7 +97,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     foe: Battle.foeData.name, guardian: Battle.foeData.guardian,
   }))));
   await shot('guardian');
-  if (!(await fightUntilCards(40))) { console.log('FAIL: guardian fight never reached cards'); process.exit(1); }
+  if (!(await fightUntilCards(60))) { console.log('FAIL: guardian fight never reached cards'); process.exit(1); }
   await page.keyboard.press('Digit2');
   await sleep(1000);
   const afterG = await page.evaluate(() => ({
@@ -131,7 +151,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   console.log('rift battle 1:', JSON.stringify(await page.evaluate(() => ({
     mode: game.mode, gauntlet: Battle.opts.gauntlet,
   }))));
-  if (!(await fightUntilCards(100))) { console.log('FAIL: rift gauntlet never reached cards'); process.exit(1); }
+  if (!(await fightUntilCards(160))) { console.log('FAIL: rift gauntlet never reached cards'); process.exit(1); }
   await page.keyboard.press('Digit1');
   await sleep(1000);
   const afterRift = await page.evaluate(() => ({
